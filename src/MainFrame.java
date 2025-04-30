@@ -17,14 +17,20 @@ public class MainFrame extends JFrame {
 
         JTabbedPane tabbedPane = new JTabbedPane();
 
-        tabbedPane.addTab("Gestión de Jugadores", crearPanelJugadores());
-        tabbedPane.addTab("Gestión de Torneos", crearPanelTorneos());
+        // Crear el modelo de lista compartido
+        DefaultListModel<String> modeloLista = new DefaultListModel<>();
+        for (Jugador jugador : gestorTorneos.getJugadores()) {
+            modeloLista.addElement(jugador.getNombre());
+        }
+
+        tabbedPane.addTab("Gestión de Jugadores", crearPanelJugadores(modeloLista));
+        tabbedPane.addTab("Gestión de Torneos", crearPanelTorneos(modeloLista));
         tabbedPane.addTab("Emparejamientos", crearPanelEmparejamientos());
 
         add(tabbedPane, BorderLayout.CENTER);
     }
 
-    private JPanel crearPanelJugadores() {
+    private JPanel crearPanelJugadores(DefaultListModel<String> modeloLista) {
         JPanel panel = new JPanel(new BorderLayout());
 
         String[] columnas = {"Nombre", "Edad"};
@@ -53,10 +59,18 @@ public class MainFrame extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String nombre = campoNombre.getText();
-                int edad = Integer.parseInt(campoEdad.getText());
+                int edad;
+
+                try {
+                    edad = Integer.parseInt(campoEdad.getText());
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(panel, "La edad debe ser un número válido.");
+                    return;
+                }
 
                 if (gestorTorneos.agregarJugador(new Jugador(nombre, edad))) {
                     modeloTabla.addRow(new Object[]{nombre, edad});
+                    modeloLista.addElement(nombre); // Actualizar la lista de jugadores
                     JOptionPane.showMessageDialog(panel, "Jugador agregado correctamente.");
                 } else {
                     JOptionPane.showMessageDialog(panel, "No se pueden agregar más jugadores.");
@@ -70,18 +84,25 @@ public class MainFrame extends JFrame {
         return panel;
     }
 
-    private JPanel crearPanelTorneos() {
+    private JPanel crearPanelTorneos(DefaultListModel<String> modeloLista) {
         JPanel panel = new JPanel(new BorderLayout());
 
-        String[] columnas = {"Nombre del Torneo", "Equipo 1", "Equipo 2"};
+        String[] columnas = {"Nombre del Torneo", "Jugadores"};
         DefaultTableModel modeloTabla = new DefaultTableModel(columnas, 0);
         JTable tablaTorneos = new JTable(modeloTabla);
         JScrollPane scrollPane = new JScrollPane(tablaTorneos);
 
-        JPanel formulario = new JPanel(new GridLayout(2, 2));
+        JList<String> listaJugadores = new JList<>(modeloLista);
+        listaJugadores.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        JScrollPane scrollJugadores = new JScrollPane(listaJugadores);
+
+        JPanel formulario = new JPanel(new GridLayout(3, 2));
         formulario.add(new JLabel("Nombre del Torneo:"));
         JTextField campoNombreTorneo = new JTextField();
         formulario.add(campoNombreTorneo);
+
+        formulario.add(new JLabel("Seleccionar Jugadores (máx. 8):"));
+        formulario.add(scrollJugadores);
 
         JButton botonCrearTorneo = new JButton("Crear Torneo");
         formulario.add(botonCrearTorneo);
@@ -90,21 +111,30 @@ public class MainFrame extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String nombreTorneo = campoNombreTorneo.getText();
+                List<String> jugadoresSeleccionados = listaJugadores.getSelectedValuesList();
 
-                if (gestorTorneos.getJugadores().size() < 8) {
-                    JOptionPane.showMessageDialog(panel, "No hay suficientes jugadores para crear un torneo.");
+                if (jugadoresSeleccionados.size() > 8) {
+                    JOptionPane.showMessageDialog(panel, "No puedes seleccionar más de 8 jugadores.");
+                    return;
+                }
+
+                if (jugadoresSeleccionados.isEmpty()) {
+                    JOptionPane.showMessageDialog(panel, "Debes seleccionar al menos un jugador.");
                     return;
                 }
 
                 if (gestorTorneos.crearTorneo(nombreTorneo)) {
                     Torneo torneo = gestorTorneos.getTorneos().get(gestorTorneos.getTorneos().size() - 1);
-                    List<Jugador> jugadoresSeleccionados = gestorTorneos.getJugadores().subList(0, 8);
-                    torneo.agregarJugadores(jugadoresSeleccionados);
+
+                    // Agregar jugadores seleccionados al torneo
+                    List<Jugador> jugadoresTorneo = gestorTorneos.getJugadores().stream()
+                            .filter(jugador -> jugadoresSeleccionados.contains(jugador.getNombre()))
+                            .collect(Collectors.toList());
+                    torneo.agregarJugadores(jugadoresTorneo);
 
                     modeloTabla.addRow(new Object[]{
                         nombreTorneo,
-                        torneo.getEquipo1().stream().map(Jugador::getNombre).collect(Collectors.toList()),
-                        torneo.getEquipo2().stream().map(Jugador::getNombre).collect(Collectors.toList())
+                        jugadoresSeleccionados
                     });
 
                     JOptionPane.showMessageDialog(panel, "Torneo creado correctamente.");
@@ -136,24 +166,33 @@ public class MainFrame extends JFrame {
                     return;
                 }
 
-                Torneo torneo = gestorTorneos.getTorneos().get(0);
+                StringBuilder emparejamientosTexto = new StringBuilder();
 
-                if (torneo.getEquipo1().isEmpty() || torneo.getEquipo2().isEmpty()) {
-                    JOptionPane.showMessageDialog(panel, "El torneo no tiene equipos completos.");
-                    return;
+                for (Torneo torneo : gestorTorneos.getTorneos()) {
+                    if (torneo.getJugadores().isEmpty()) {
+                        emparejamientosTexto.append("El torneo '")
+                                .append(torneo.getNombre())
+                                .append("' no tiene jugadores.\n\n");
+                        continue;
+                    }
+
+                    torneo.generarEmparejamientos();
+
+                    emparejamientosTexto.append("Emparejamientos de ")
+                            .append(torneo.getNombre())
+                            .append(":\n");
+
+                    for (Emparejamiento emparejamiento : torneo.getEmparejamientos()) {
+                        emparejamientosTexto.append(emparejamiento.getJugador1().getNombre())
+                                .append(" vs ")
+                                .append(emparejamiento.getJugador2() != null ? emparejamiento.getJugador2().getNombre() : "Nadie")
+                                .append("\n");
+                    }
+
+                    emparejamientosTexto.append("\n");
                 }
 
-                torneo.generarEmparejamientos();
-
-                StringBuilder emparejamientos = new StringBuilder();
-                for (Emparejamiento emparejamiento : torneo.getEmparejamientos()) {
-                    emparejamientos.append(emparejamiento.getJugador1().getNombre())
-                            .append(" vs ")
-                            .append(emparejamiento.getJugador2().getNombre())
-                            .append("\n");
-                }
-
-                areaEmparejamientos.setText(emparejamientos.toString());
+                areaEmparejamientos.setText(emparejamientosTexto.toString());
             }
         });
 

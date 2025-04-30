@@ -6,15 +6,12 @@ public class GestorTorneos {
     private List<Torneo> torneos = new ArrayList<>();
 
     public GestorTorneos() {
-        // Jugadores predefinidos
+        // Jugadores predefinidos (solo 5)
         jugadores.add(new Jugador("Jugador 1", 25));
         jugadores.add(new Jugador("Jugador 2", 28));
         jugadores.add(new Jugador("Jugador 3", 22));
         jugadores.add(new Jugador("Jugador 4", 30));
         jugadores.add(new Jugador("Jugador 5", 27));
-        jugadores.add(new Jugador("Jugador 6", 24));
-        jugadores.add(new Jugador("Jugador 7", 26));
-        jugadores.add(new Jugador("Jugador 8", 29));
     }
 
     public boolean agregarJugador(Jugador jugador) {
